@@ -12,24 +12,27 @@ int main(int argc, char* argv[])
   int x, m;
   int s_com,recus;
   struct couple don, res;
-  char mes[100];
+  char mes[100], tmp[50];
   struct sockaddr_in adr_rpc, appelant;
   struct hostent *entree;
   int lg_app;
   
-  if (argc != 3)
+  if (argc != 2)
   {
     printf("--------------- Erreur !!!!!!!!!!!!!!!! ------------------\n");
-    printf("Usage : ./client <port> <host>\n");
+    printf("Usage : ./client <port>\n");
     exit(1);
   }
 
   /*char hostname[1024];
   hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  gethostname(don.nom, 15);*/
+  gethostname(hostname, 1023);*/
+  tmp[49] = "\0";
+  gethostname(tmp, 49);
+  
+  don.nom = tmp;
 
-  don.nom = argv[2];
+  //don.nom = argv[2];
   don.port = atoi(argv[1]);
   
   printf("local nom : %s // local port : %d\n", don.nom, don.port);

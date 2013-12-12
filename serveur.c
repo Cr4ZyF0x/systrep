@@ -94,8 +94,6 @@ void emit_udp(char * mes, char * nom, int port)
   struct sockaddr_in adr, appelant;
   struct hostent *entree;
   int lg_app;
-  
-  printf("--- Début emit_udp ---\n");
 
   s_com=socket(AF_INET, SOCK_DGRAM,0);
   printf("la socket est cree\n");
@@ -115,8 +113,6 @@ void emit_udp(char * mes, char * nom, int port)
     printf("gros probleme\n");
 
   recvfrom(s_com,mes,sizeof(mes),0, (struct sockaddr *)&appelant,&lg_app);
-  printf("message recu : %s\n",mes);
+  printf("message recu : %s\n\n",mes);
   close(s_com);
-  
-  printf("--- Fin emit_udp ---\n\n");
 }
