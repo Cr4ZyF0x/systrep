@@ -1,5 +1,6 @@
 #include "entete.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -9,10 +10,11 @@
 
 int main(int argc, char* argv[])
 {
-  int x, m;
+  int x, m, port_c1, port_c2;
+  int i=0, j=0, k=0, l=0;
   int s_com,recus;
   struct couple don, res;
-  char mes[100], tmp[50];
+  char mes[100], tmp[50], nom_client1[20], nom_client2[20], port_client1[5], port_client2[5];
   struct sockaddr_in adr_rpc, appelant;
   struct hostent *entree;
   int lg_app;
@@ -27,7 +29,7 @@ int main(int argc, char* argv[])
   /*char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);*/
-  tmp[49] = "\0";
+  tmp[49] = '\0';
   gethostname(tmp, 49);
   
   don.nom = tmp;
@@ -86,9 +88,47 @@ int main(int argc, char* argv[])
     }
     else 
     {
-	printf("\nListe des clients :\n%s",mes);
+	printf("\nListe des clients : \n%s\n",mes);
 	sendto(s_com,"OK",3,0,(struct sockaddr *)&appelant, lg_app);
     }
+  
+	while(mes[i]!=' ')
+	{
+		nom_client1[i]=mes[i];
+		i++;
+	}
+	nom_client1[i]='\0';
+	i++;
+	while(mes[i]!=' ')
+	{
+		port_client1[j]=mes[i];
+		i++;
+		j++;
+	}
+	port_client1[j]='\0';
+	port_c1 = atoi(port_client1);
+	i++;
+  
+	while(mes[i]!=' ')
+	{
+		nom_client2[k]=mes[i];
+		i++;
+		k++;
+	}
+	nom_client2[k]='\0';
+	i++;
+	while(mes[i]!='\0')
+	{
+		port_client2[l]=mes[i];
+		i++;
+		l++;
+	}
+	port_client2[l]='\0';
+	port_c2 = atoi(port_client2);
+	
+	
+
+	printf("\nListe des clients :\n%s %d %s %d\n", nom_client1, port_c1, nom_client2, port_c2);
     close(s_com);
   }
 }

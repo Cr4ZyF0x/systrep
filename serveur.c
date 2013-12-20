@@ -58,20 +58,25 @@ char * stock(struct couple *p)
     {
 	    printf("\n-------- Envoi message UDP ---------\n");
 	    printf("Nombre max de clients atteint\n\n");
-	    sprintf(mes,"Client %d // nom : %s // port : %d\nClient %d // nom : %s // port : %d\n",
+	    printf("Client %d // nom : %s // port : %d\nClient %d // nom : %s // port : %d\n",
 		    2, stockage[1].nom, stockage[1].port,
 		    3, stockage[2].nom, stockage[2].port);
-	    printf("mes :\n%s", mes);
+	    sprintf(mes,"%s %d %s %d", stockage[1].nom, stockage[1].port, stockage[2].nom, stockage[2].port);
+	    printf("-- mes : %s --\n", mes);
 	    emit_udp(mes, stockage[0].nom, stockage[0].port);
-	    sprintf(mes,"Client %d // nom : %s // port : %d\nClient %d // nom : %s // port : %d\n",
+	    
+	    printf("Client %d // nom : %s // port : %d\nClient %d // nom : %s // port : %d\n",
 		    1, stockage[0].nom, stockage[0].port,
 		    3, stockage[2].nom, stockage[2].port);
-	    printf("mes :\n%s", mes);
+	    sprintf(mes,"%s %d %s %d", stockage[0].nom, stockage[0].port, stockage[2].nom, stockage[2].port);
+	    printf("-- mes : %s --\n", mes);
 	    emit_udp(mes, stockage[1].nom, stockage[1].port);
-	    sprintf(mes,"Client %d // nom : %s // port : %d\nClient %d // nom : %s // port : %d\n",
+	    	    
+	    printf("Client %d // nom : %s // port : %d\nClient %d // nom : %s // port : %d\n",
 		    1, stockage[0].nom, stockage[0].port,
 		    2, stockage[1].nom, stockage[1].port);
-	    printf("mes :\n%s", mes);		
+	    sprintf(mes,"%s %d %s %d", stockage[0].nom, stockage[0].port, stockage[1].nom, stockage[1].port);
+	    printf("-- mes : %s --\n", mes);	    
 	    emit_udp(mes, stockage[2].nom, stockage[2].port);
     }
     
