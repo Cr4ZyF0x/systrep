@@ -31,5 +31,3 @@ int xdr_couple();
 char *rac();
 char *mult();
 */
-
-
