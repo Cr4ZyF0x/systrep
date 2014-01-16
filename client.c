@@ -18,6 +18,7 @@ int main(int argc, char* argv[])
   struct sockaddr_in adr_rpc, appelant;
   struct hostent *entree;
   int lg_app;
+  int jeton_present = -1; // -1 = non init, 0 = non présent, 1 = présent
   
   if (argc != 2)
   {
@@ -62,6 +63,15 @@ int main(int argc, char* argv[])
   {
     printf("Nom et port envoye par RPC !\n");
     printf("Réponse RPC du serveur : %d\n", x);
+    
+    if (x==2)
+    {
+      jeton = 1;
+    }
+    else if (x == 1)
+    {
+      jeton = 0;
+    }
   }
   else
   {
@@ -88,7 +98,7 @@ int main(int argc, char* argv[])
     }
     else 
     {
-	printf("\nListe des clients : \n%s\n",mes);
+	//printf("\nListe des clients : \n%s\n",mes);
 	sendto(s_com,"OK",3,0,(struct sockaddr *)&appelant, lg_app);
     }
   
@@ -127,8 +137,118 @@ int main(int argc, char* argv[])
 	port_c2 = atoi(port_client2);
 	
 	
-
-	printf("\nListe des clients :\n%s %d %s %d\n", nom_client1, port_c1, nom_client2, port_c2);
-    close(s_com);
+	//printf("\nListe des clients :\n%s %d %s %d\n", nom_client1, port_c1, nom_client2, port_c2);
+	
+	// -------------------- Début part SUZUKI-KAZAMI -------------------------------
+	
+	suzuki_kasami(nom_client1, port_c1, nom_client2, port_c2, jeton);
+	
+	close(s_com);
   }
+}
+
+// prblm : il va falloir décider d'un ID pour chaque site -> V[i]
+
+void suzuki_kasami(char * nom_client1, int port_c1, char * nom_client2, int port_c2, int jeton)
+{
+  int etat; // -1 = Hors SC pas demand, 0 = Hors SC en attente, 1 = SC car demand
+  int compteur10sec = 1000;
+  int v[3]; // horloge vectorielle
+  int demande = 0; // pour savoir si on a déjà demandé la SC
+  
+  // init de v
+  for(int i=0; i<3; i++)
+    v[i] = 0;
+  
+  while(1)
+  {
+    if (getchar() == 'e')
+    {
+      demande = 1;
+      printf("Demande d'entrée en SC\n");
+      // ---------- Demande d'entrée en SC -------------
+      v[i] = v[i] + 1;
+      if (jeton_present == 1)
+      {
+	printf("J'entre en SC !\n");
+	etat = 1; // Dedans
+	
+	while(compteur10sec>0)
+	{
+	  if(select(2, socket, stdin, NULL, NULL, timeout))
+	  {
+	    misEnAttenteDeLaDemande();
+	  }
+	  compteur10sec --;
+	}
+	// Sortie de la SC
+	etat = -1;
+	// maj LNi : 
+	jeton.lni = v;
+	demande = 0;
+	if(jeton.lni != v)
+	{
+	  envoiJeton(Sj);
+	  jeton_present = 0;
+	}
+      }
+      else // jeton absent
+      {
+	diffuser(req, v, Si); -> emit_udp
+	état = 0; // attente
+      }
+      
+    }
+    
+    // -------------- Réception d'un message (rqt) ------------------
+    
+    maj(v); // horloge vect -> MAX de chaque val
+    
+    if( (etat == -1) && (jeton == 1)) // etat = dehors && jeton présent
+    {
+      envoiJeton(Sj); -> emit_udp
+      jeton = 0;
+    }
+    else if ( etat == 1) // etat = dedans
+    {
+      misEnAttenteDeLaDemande();
+    }
+    
+    // ------------- Réception d'un jeton -----------
+    recvfrom(jeton);
+    if ( etat == 0) // etat == en attente
+    {
+      etat = 1; // etat = dedans
+    }
+  }
+}
+
+
+void emit_udp(char * mes, char * nom, int port) 
+{
+  int s_com, emis;
+  struct sockaddr_in adr, appelant;
+  struct hostent *entree;
+  int lg_app;
+
+  s_com=socket(AF_INET, SOCK_DGRAM,0);
+  printf("la socket suzuki est cree\n");
+
+  adr.sin_family=AF_INET;
+  adr.sin_port=htons(port);
+  adr.sin_addr.s_addr=INADDR_ANY;
+
+  lg_app=sizeof(struct sockaddr_in);
+  
+  entree= (struct hostent *)gethostbyname(nom);
+  bcopy((char *) entree->h_addr, (char *)&adr.sin_addr, entree->h_length);
+  
+  emis=sendto(s_com,mes,100,0,(struct sockaddr *)&adr, lg_app);
+
+  if (emis <=0)
+    printf("gros probleme\n");
+
+  recvfrom(s_com,mes,sizeof(mes),0, (struct sockaddr *)&appelant,&lg_app);
+  printf("message recu : %s\n\n",mes);
+  close(s_com);
 }
