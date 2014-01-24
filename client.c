@@ -171,12 +171,13 @@ int main(int argc, char* argv[])
 void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_c1, char * nom_client2, int port_c2, int id_c2, int jeton_present)
 {
     int etat;	 	// -1 = Hors SC pas demand, 0 = Hors SC en attente, 1 = SC car demand
-    int lg_app, i, id_sender;
+    int lg_app, i, j, id_sender;
     int local[3], horloge[3]; 		// horloge vectorielle local et transmise
     int demande = 0; 	// pour savoir si on a déjà demandé la SC
     fd_set rfds;	// ensemble des descripteurs de fichier en READ
     int s_fd, retour;	// socket pour UDP, retour du select
     struct timeval attente;
+    char entree[100];	// buffer d'entrée clavier
     char msgRecu[100], msgEnvoi[100];	// message recu sur la socket d'écoute s_fd et à envoyer
     struct sockaddr_in appelant;
     
@@ -326,11 +327,11 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 		    // envoi du jeton si différence (cad id_min != -1)
 		    if (id_min == id_c1)
 		    {
-			send_udp(msgenvoi, nom_client1, port_c1, horloge);
+			send_udp(msgEnvoi, nom_client1, port_c1, horloge);
 		    }
 		    else if (id_min == id_c2)
 		    {
-			send_udp(msgenvoi, nom_client2, port_c2, horloge);
+			send_udp(msgEnvoi, nom_client2, port_c2, horloge);
 		    }
 		}
 	    }
@@ -338,93 +339,102 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	
 	if (FD_ISSET(0, &lectures))
 	{		
-	    // reçu sur STDIN
+	    // réception d'entrée clavier
 	    j = 0;
 	    while ((i=getchar()) != '\n')
-		frappe[j++]=i;
-	    frappe[j]='\0';
+		entree[j++]=i;
+	    entree[j]='\0';
 	    
-	    
-	    if (!strcmp(frappe, "E") || !strcmp(frappe, "e"))
+	    if (!strcmp(entree, "E") || !strcmp(entree, "e"))
 	    {
-		if (etat != out)
+		if (etat != -1)
 		{
-		    puts(" ____________________________________ ");
-		    puts("|                                    |");
-		    puts("| Already waiting or in, KEEP CALM!. |");
-		    puts("|____________________________________|");
+		    printf("===================================\n");
+		    printf("------ En attente ou En SC ! ------\n------ Veuillez patienter ------\n");
+		    printf("===================================\n");
 		}
 		else
 		{
-		    // update clock
-		    ++horloge[ind];
+		    // MAJ horloge locale
+		    ++local[my_id];
 		    
-		    thread = (pthread_t *) malloc(sizeof(pthread_t *));
+		    //thread = (pthread_t *) malloc(sizeof(pthread_t *));
 		    
 		    // send the query to everyone
-		    pthread_create(thread, NULL, process_stdin, (int*) horloge);
+		    //pthread_create(thread, NULL, process_stdin, (int*) horloge);
+		    
+		    if (jeton_present == 1)
+		    {
+			etat = 1;		// IN
+			printf("Entree en SC car demande\nC'est parti pour 10 sec\n");
+			
+			sleep(10);		// repos de 10 sec
+			
+			etat = -1;		// OUT
+			
+			// MAJ horloge
+			horloge[my_id] ++;
+			
+			// détermination des sites ayant été en SC
+			for (i=0; i<3; i++)
+			{
+			    if (local[i] > horloge[i])
+			    {
+				toSend[i] = 1;
+			    }
+			    else
+			    {
+				toSend[i] = 0;
+			    }
+			}
+			
+			// détermination du site à qui envoyer le jeton
+			id_min = -1;
+			for(i=0; i<3; i++)
+			{
+			    if (toSend[i] == 1)
+			    {
+				if (id_min == -1)
+				{
+				    id_min = i;
+				}
+				if (horloge[i] < horloge[id_min])
+				{
+				    id_min = i;
+				}
+			    }
+			}
+			
+			// envoi du jeton si différence (cad id_min != -1)
+			if (id_min == id_c1)
+			{
+			    send_udp(msgEnvoi, nom_client1, port_c1, horloge);
+			}
+			else if (id_min == id_c2)
+			{
+			    send_udp(msgEnvoi, nom_client2, port_c2, horloge);
+			}
+		    }
+		    else
+		    {
+			// envoi du jeton à tout le monde
+			sprintf(msgEnvoi,"%d needJeton", my_id);
+			printf("msgEnvoi: '%s'\n", msgEnvoi); 
+			
+			// envoi aux 2 autres clients
+			send_udp(msgEnvoi, nom_client1, port_c1, horloge);
+			send_udp(msgEnvoi, nom_client2, port_c2, horloge);
+			
+			etat = 0;	// Attente
+		    }
 		}
+	    }
+	    else if (!strcmp(entree, "Q") || !strcmp(entree, "q") || !strcmp(entree, "quit") || !strcmp(entree, "exit"))
+	    {
+		exit(0);
 	    }
 	    else
-		puts("unknown command. Press e to enter in the critical section.");
-	}
-	if (getchar() == 'e')
-	{
-	    demande = 1;
-	    printf("Demande d'entrée en SC\n");
-	    // ---------- Demande d'entrée en SC -------------
-	    local[i] = local[i] + 1;
-	    if (jeton_present == 1)
-	    {
-		printf("J'entre en SC !\n");
-		etat = 1; // Dedans
-		
-		while(compteur10sec>0)
-		{
-		    if(select(2, socket, stdin, NULL, NULL, timeout))
-		    {
-			misEnAttenteDeLaDemande();
-		    }
-		    compteur10sec --;
-		}
-		// Sortie de la SC
-		etat = -1;
-		// maj LNi : 
-		jeton.lni = v;
-		demande = 0;
-		if(jeton.lni != v)
-		{
-		    envoiJeton(Sj);
-		    jeton_present = 0;
-		}
-	    }
-	    else // jeton absent
-	    {
-		diffuser(req, v, Si); -> emit_udp
-		état = 0; // attente
-	    }
-	    
-	}
-	
-	// -------------- Réception d'un message (rqt) ------------------
-	
-	maj(v); // horloge vect -> MAX de chaque val
-	
-	if( (etat == -1) && (jeton == 1)) // etat = dehors && jeton présent
-	{
-	    envoiJeton(Sj); -> emit_udp
-	    jeton = 0;
-	}
-	else if ( etat == 1) // etat = dedans
-	{
-	    misEnAttenteDeLaDemande();
-	}
-	
-	// ------------- Réception d'un jeton -----------
-	recvfrom(jeton);
-	if ( etat == 0) // etat == en attente
-	{
-	    etat = 1; // etat = dedans
+		printf("Commande inconnue !\nAppuyez sur :\n\t E pour entrer en SC\n\t q ou quit ou exit pour quitter\n");
 	}
     }
 }
