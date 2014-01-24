@@ -163,30 +163,29 @@ int main(int argc, char* argv[])
 	close(s_com);	// fermeture socket de comm rpc avec le serveur
 	
 	// -------------------- Début part SUZUKI-KAZAMI -------------------------------
-	//suzuki_kasami(id_self, nom_client1, port_c1, id_client1, nom_client2, port_c2, id_client2, jeton_present);
+	suzuki_kasami(don.port, nom_client1, port_c1, id_client1, nom_client2, port_c2, id_client2, jeton_present);
     }
 }
 
 
-/*void suzuki_kasami(int my_id, char * nom_client1, int port_c1, int id_c1, char * nom_client2, int port_c2, int id_c2, int jeton_present)
+void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_c1, char * nom_client2, int port_c2, int id_c2, int jeton_present)
 {
     int etat;	 	// -1 = Hors SC pas demand, 0 = Hors SC en attente, 1 = SC car demand
     int lg_app, i, id_sender;
-    int v[3]; 		// horloge vectorielle
+    int local[3], horloge[3]; 		// horloge vectorielle local et transmise
     int demande = 0; 	// pour savoir si on a déjà demandé la SC
     fd_set rfds;	// ensemble des descripteurs de fichier en READ
     int s_fd, retour;	// socket pour UDP, retour du select
     struct timeval attente;
-    char msgRecu[100];	// message recu sur la socket d'écoute s_fd
+    char msgRecu[100], msgEnvoi[100];	// message recu sur la socket d'écoute s_fd et à envoyer
     struct sockaddr_in appelant;
-    
     
     
     // ------------- Création socket UDP pour comm entre clients --------------------
     s_fd=socket(AF_INET, SOCK_DGRAM,0);
     
     adr_rpc.sin_family=AF_INET;
-    adr_rpc.sin_port=htons(my_id);	// mon port de comm
+    adr_rpc.sin_port=htons(port);	// mon port de comm
     adr_rpc.sin_addr.s_addr=INADDR_ANY;
     
     if (bind(s_fd,(struct sockaddr *) &adr_rpc, sizeof (struct sockaddr_in)) !=0)
@@ -199,10 +198,11 @@ int main(int argc, char* argv[])
     // init du vecteur d'horloges vectorilles
     for(int i=0; i<3; i++)
     {
-	v[i] = 0;
+	local[i] = 0;
+	horloge[i] = 0;
     }
     
-      
+    
     while(1)
     {
 	// LNi : lastNumber = numéro de la dernière demande d'entrée en SC du site i satisfaite
@@ -235,7 +235,11 @@ int main(int argc, char* argv[])
 	    }
 	    else
 	    {
+		//MAJ local[i]
+		local[my_id] = max(local[my_id], horloge[my_id]);
+		
 		// requete du type "id_expéditeur type_requete" ex: "1 needJeton"
+		
 		printf("[Suzuki] Requete recue : %s\n",msgRecu);
 		
 		//thread = (pthread_t *) malloc(sizeof(pthread_t *));
@@ -254,16 +258,24 @@ int main(int argc, char* argv[])
 		}
 		type_requete[i] = '\0';
 		
-		printf("[Suzuki] Apres extraction :\n id_sender = %d\n type_requete = %s", id_sender, type_requete);
+		printf("[Suzuki] Apres extraction :\n id_sender = %d\n type_requete = %s\n", id_sender, type_requete);
 		
 		// -->> comportement en réception de requete SC  << --
 		// quelqu'un veut le jeton && on l'a && on est pas en SC
 		if (strcmp(type_requete, "needJeton") == 0 && jeton_present == 1 && etat == -1)
 		{
 		    //printf("[DEBUG] sending to %d the token\n", receiverInd);
-		    //emit_udp(msgRecu, 
-		    send_udp(envoi);
-		    send_udp(serializeData(sendToken, message), message, tab, ind, receiverInd, receiverInd + 1);
+		    sprintf(msgEnvoi,"%d incomingJeton", my_id);
+		    printf("msgEnvoi: '%s'\n", msgEnvoi);
+		    
+		    if (id_sender == id_c1)
+		    {
+			send_udp(msgEnvoi, nom_client1, port_c1, horloge);
+		    }
+		    else if (id_sender == id_c2)
+		    {
+			send_udp(msgEnvoi, nom_client2, port_c2, horloge);
+		    }
 		    jeton_present = 0;
 		}
 		
@@ -276,25 +288,53 @@ int main(int argc, char* argv[])
 		    
 		    sleep(10);		// repos de 10 sec
 		    
-		    // ====================================
-		    // jen suis là ========================
-		    // ====================================
-		   
-		    jeton[ind] = horloge[ind];
-		    etat = out;
-		    puts(" _______");
-		    puts("|       |");
-		    puts("| out ! |");
-		    puts("|_______|");
-
-		    olderInd = whoToSendTheToken();
-		    if (olderInd != -1)
+		    etat = -1;		// OUT
+		    
+		    // MAJ horloge
+		    horloge[my_id] ++;
+		    
+		    // détermination des sites ayant été en SC
+		    for (i=0; i<3; i++)
 		    {
-			    sendTheToken(olderInd);
+			if (local[i] > horloge[i])
+			{
+			    toSend[i] = 1;
+			}
+			else
+			{
+			    toSend[i] = 0;
+			}
+		    }
+		    
+		    // détermination du site à qui envoyer le jeton
+		    id_min = -1;
+		    for(i=0; i<3; i++)
+		    {
+			if (toSend[i] == 1)
+			{
+			    if (id_min == -1)
+			    {
+				id_min = i;
+			    }
+			    if (horloge[i] < horloge[id_min])
+			    {
+				id_min = i;
+			    }
+			}
+		    }
+		    
+		    // envoi du jeton si différence (cad id_min != -1)
+		    if (id_min == id_c1)
+		    {
+			send_udp(msgenvoi, nom_client1, port_c1, horloge);
+		    }
+		    else if (id_min == id_c2)
+		    {
+			send_udp(msgenvoi, nom_client2, port_c2, horloge);
 		    }
 		}
 	    }
-	} 
+	}
 	
 	if (FD_ISSET(0, &lectures))
 	{		
@@ -333,7 +373,7 @@ int main(int argc, char* argv[])
 	    demande = 1;
 	    printf("Demande d'entrée en SC\n");
 	    // ---------- Demande d'entrée en SC -------------
-	    v[i] = v[i] + 1;
+	    local[i] = local[i] + 1;
 	    if (jeton_present == 1)
 	    {
 		printf("J'entre en SC !\n");
@@ -387,7 +427,7 @@ int main(int argc, char* argv[])
 	    etat = 1; // etat = dedans
 	}
     }
-}*/
+}
 
 // fonction peut-être à revoir ou inutile dans le client
 void send_udp(char * mes, char * nom, int port) 
@@ -398,7 +438,7 @@ void send_udp(char * mes, char * nom, int port)
     int lg_app;
     
     s_com=socket(AF_INET, SOCK_DGRAM,0);
-    printf("la socket suzuki est cree\n");
+    printf("socket envoi cree vers %d\n", port);
     
     adr.sin_family=AF_INET;
     adr.sin_port=htons(port);
@@ -412,9 +452,7 @@ void send_udp(char * mes, char * nom, int port)
     emis=sendto(s_com,mes,100,0,(struct sockaddr *)&adr, lg_app);
     
     if (emis <=0)
-	printf("gros probleme\n");
+	printf("[Suzuki UDP -> client] Pb envoi msgEnvoi\n");
     
-    recvfrom(s_com,mes,sizeof(mes),0, (struct sockaddr *)&appelant,&lg_app);
-    printf("message recu : %s\n\n",mes);
     close(s_com);
 }
