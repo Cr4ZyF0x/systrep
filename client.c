@@ -16,28 +16,24 @@ int main(int argc, char* argv[])
     int a=0, i=0, j=0, k=0, l=0;
     int s_com, recus;
     struct couple don, res;
-    char mes[100], tmp[50], nom_client1[20], nom_client2[20], port_client1[5], port_client2[5];
+    char mes[100], tmp[50], nom_client1[20], nom_client2[20], port_client1[5], port_client2[5], host[20];
     struct sockaddr_in adr_rpc, appelant;
     struct hostent *entree;
     int lg_app;
     int jeton_present = -1; // -1 = non init, 0 = non présent, 1 = présent
     
-    if (argc != 2)
+    if (argc != 3)
     {
 	printf("--------------- Erreur !!!!!!!!!!!!!!!! ------------------\n");
-	printf("Usage : ./client <port>\n");
+	printf("Usage : ./client <port> <Serveur_hostname>\n");
 	exit(1);
     }
-    
-    /*char hostname[1024];
-    hostname[1023] = '\0';
-    gethostname(hostname, 1023);*/
+
     tmp[49] = '\0';
     gethostname(tmp, 49);
     
     don.nom = tmp;
     
-    //don.nom = argv[2];
     don.port = atoi(argv[1]);
     
     printf("local nom : %s // local port : %d\n", don.nom, don.port);
@@ -57,8 +53,10 @@ int main(int argc, char* argv[])
     }
     
     // --------------- Call RPC ------------------------------
-    // on entre ici en "dur" le nom de l'hôte du serveur
-    m=callrpc("etud", ARITH_PROG, ARITH_VERS1, MULT_PROC, xdr_couple,&don,xdr_int,&x);
+    sprintf(host,"%s",argv[2]);
+    printf("nom du serv : '%s'\n");
+
+    m=callrpc(host, ARITH_PROG, ARITH_VERS1, MULT_PROC, xdr_couple,&don,xdr_int,&x);
     
     if (m==0)
     {
@@ -100,7 +98,6 @@ int main(int argc, char* argv[])
 	}
 	else 
 	{
-	    //printf("\nmsg recu : |%s|\n",mes);
 	    sendto(s_com,"OK",3,0,(struct sockaddr *)&appelant, lg_app);
 	}
 	
@@ -162,7 +159,7 @@ int main(int argc, char* argv[])
 	
 	close(s_com);	// fermeture socket de comm rpc avec le serveur
 	
-	// -------------------- Début part SUZUKI-KAZAMI -------------------------------
+	// -------------------- Début partie SUZUKI-KASAMI -------------------------------
 	suzuki_kasami(id_self, don.port, nom_client1, port_c1, id_client1, nom_client2, port_c2, id_client2, jeton_present);
     }
 }
@@ -195,6 +192,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	exit(1); 
     }
     
+    etat = -1;		// De base OUT de SC
     
     // init du vecteur d'horloges vectorilles
     for(i=0; i<3; i++)
@@ -206,7 +204,6 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
     
     while(1)
     {
-	// LNi : lastNumber = numéro de la dernière demande d'entrée en SC du site i satisfaite
 	FD_ZERO(&rfds);		// on vide l'ensemble
 	FD_SET(0,&rfds);	// ajout de STDIN
 	FD_SET(s_fd, &rfds);	// ajout de la socket
@@ -219,7 +216,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	
 	if (retour == -1)
 	{		
-	    perror("[Suzuki] --Erreur-- du select() :\n");
+	    perror("[Suzuki] --Erreur-- du select() :\n\n");
 	    exit(1);
 	}
 	
@@ -231,7 +228,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	    retour = recvfrom(s_fd, msgRecu, 100, 0,(struct sockaddr *) &appelant, &lg_app);
 	    if (retour <= 0)
 	    {
-		perror("[Suzuki] --Erreur-- creation de socket\n");
+		perror("[Suzuki] --Erreur-- creation de socket\n\n");
 		exit(1);
 	    }
 	    else
@@ -239,33 +236,27 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 		//MAJ local[i]
 		local[my_id] = MAX(local[my_id], horloge[my_id]);
 		
-		// requete du type "id_expéditeur type_requete" ex: "1 needJeton"
-		
-		printf("[Suzuki] Requete recue : %s\n",msgRecu);
-		
-		//thread = (pthread_t *) malloc(sizeof(pthread_t *));
-		//pthread_create(thread, NULL, process_udp, (char*) donnee); 
-		
-		// msgRecu > sortir l'id de l'envoyeur et la requete le strcmp ne marche pas
+		// requete du type "id_expéditeur type_requete" ex: "1 needJeton"		
+		printf("[Suzuki] Requete recue : %s\n\n",msgRecu);
+				
 		i=0;
+		j=0;
 		
 		id_sender = atoi(&msgRecu[i]);
 		i += 2; // espace + début type_requete
 		
 		while(msgRecu[i] != '\0')
 		{
-		    type_requete[i] = msgRecu[i];
+		    type_requete[j] = msgRecu[i];
 		    i++;
+		    j++;
 		}
-		type_requete[i] = '\0';
-		
-		printf("[Suzuki] Apres extraction :\n id_sender = %d\n type_requete = %s\n", id_sender, type_requete);
+		type_requete[j] = '\0';
 		
 		// -->> comportement en réception de requete SC  << --
 		// quelqu'un veut le jeton && on l'a && on est pas en SC
 		if (strcmp(type_requete, "needJeton") == 0 && jeton_present == 1 && etat == -1)
 		{
-		    //printf("[DEBUG] sending to %d the token\n", receiverInd);
 		    sprintf(msgEnvoi,"%d incomingJeton", my_id);
 		    printf("msgEnvoi: '%s'\n", msgEnvoi);
 		    
@@ -285,9 +276,14 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 		{
 		    jeton_present = 1;
 		    etat = 1;		// IN
-		    printf("j'ai le jeton !!!!!!!!!!!!!\n C'est parti pour 10 sec\n");
+		    
+		    printf("===========================\n");
+		    printf("J'ai le jeton !!!!!!!!!!!!!\nC'est parti pour 10 sec\n");
+		    printf("===========================\n");
 		    
 		    sleep(10);		// repos de 10 sec
+		    
+		    printf("------ Je sors ------\n\n");
 		    
 		    etat = -1;		// OUT
 		    
@@ -357,18 +353,16 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 		{
 		    // MAJ horloge locale
 		    ++local[my_id];
-		    
-		    //thread = (pthread_t *) malloc(sizeof(pthread_t *));
-		    
-		    // send the query to everyone
-		    //pthread_create(thread, NULL, process_stdin, (int*) horloge);
-		    
+		    		    
 		    if (jeton_present == 1)
 		    {
 			etat = 1;		// IN
+			printf("===================================\n");
 			printf("Entree en SC car demande\nC'est parti pour 10 sec\n");
+			printf("===================================\n");
 			
 			sleep(10);		// repos de 10 sec
+			printf("------ Je sors ------\n\n");
 			
 			etat = -1;		// OUT
 			
@@ -431,16 +425,17 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	    }
 	    else if (!strcmp(entree, "Q") || !strcmp(entree, "q") || !strcmp(entree, "quit") || !strcmp(entree, "exit"))
 	    {
+		close(s_fd);
 		exit(0);
 	    }
 	    else
-		printf("Commande inconnue !\nAppuyez sur :\n\t E pour entrer en SC\n\t q ou quit ou exit pour quitter\n");
+		printf("Commande inconnue !\nAppuyez sur :\n\t E ou e pour entrer en SC\n\t Q, q, quit ou exit pour quitter\n");
 	}
     }
 }
 
-// fonction peut-être à revoir ou inutile dans le client
-void send_udp(char * mes, char * nom, int port, int * horloge) 
+
+void send_udp(char * mes, char * nom, int port, int * horloge)
 {
     int s_com, emis;
     struct sockaddr_in adr, appelant;
@@ -448,7 +443,7 @@ void send_udp(char * mes, char * nom, int port, int * horloge)
     int lg_app;
     
     s_com=socket(AF_INET, SOCK_DGRAM,0);
-    printf("socket envoi cree vers %d\n", port);
+    printf("socket envoi creee vers %d\n", port);
     
     adr.sin_family=AF_INET;
     adr.sin_port=htons(port);
