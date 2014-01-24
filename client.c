@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
 	close(s_com);	// fermeture socket de comm rpc avec le serveur
 	
 	// -------------------- Début part SUZUKI-KAZAMI -------------------------------
-	suzuki_kasami(don.port, nom_client1, port_c1, id_client1, nom_client2, port_c2, id_client2, jeton_present);
+	suzuki_kasami(id_self, don.port, nom_client1, port_c1, id_client1, nom_client2, port_c2, id_client2, jeton_present);
     }
 }
 
@@ -171,25 +171,25 @@ int main(int argc, char* argv[])
 void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_c1, char * nom_client2, int port_c2, int id_c2, int jeton_present)
 {
     int etat;	 	// -1 = Hors SC pas demand, 0 = Hors SC en attente, 1 = SC car demand
-    int lg_app, i, j, id_sender;
-    int local[3], horloge[3]; 		// horloge vectorielle local et transmise
+    int lg_app, i, j, id_sender, id_min;
+    int local[3], horloge[3], toSend[3];	// horloge vectorielle local et transmise
     int demande = 0; 	// pour savoir si on a déjà demandé la SC
     fd_set rfds;	// ensemble des descripteurs de fichier en READ
     int s_fd, retour;	// socket pour UDP, retour du select
     struct timeval attente;
     char entree[100];	// buffer d'entrée clavier
-    char msgRecu[100], msgEnvoi[100];	// message recu sur la socket d'écoute s_fd et à envoyer
-    struct sockaddr_in appelant;
+    char msgRecu[100], msgEnvoi[100], type_requete[100];	// message recu sur la socket d'écoute s_fd et à envoyer
+    struct sockaddr_in adr, appelant;
     
     
     // ------------- Création socket UDP pour comm entre clients --------------------
     s_fd=socket(AF_INET, SOCK_DGRAM,0);
     
-    adr_rpc.sin_family=AF_INET;
-    adr_rpc.sin_port=htons(port);	// mon port de comm
-    adr_rpc.sin_addr.s_addr=INADDR_ANY;
+    adr.sin_family=AF_INET;
+    adr.sin_port=htons(port);	// mon port de comm
+    adr.sin_addr.s_addr=INADDR_ANY;
     
-    if (bind(s_fd,(struct sockaddr *) &adr_rpc, sizeof (struct sockaddr_in)) !=0)
+    if (bind(s_fd,(struct sockaddr *) &adr, sizeof (struct sockaddr_in)) !=0)
     {
 	printf("[Comm UDP -> Client] Pb de creation socket\n");
 	exit(1); 
@@ -197,7 +197,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
     
     
     // init du vecteur d'horloges vectorilles
-    for(int i=0; i<3; i++)
+    for(i=0; i<3; i++)
     {
 	local[i] = 0;
 	horloge[i] = 0;
@@ -237,7 +237,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	    else
 	    {
 		//MAJ local[i]
-		local[my_id] = max(local[my_id], horloge[my_id]);
+		local[my_id] = MAX(local[my_id], horloge[my_id]);
 		
 		// requete du type "id_expéditeur type_requete" ex: "1 needJeton"
 		
@@ -337,7 +337,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 	    }
 	}
 	
-	if (FD_ISSET(0, &lectures))
+	if (FD_ISSET(0, &rfds))
 	{		
 	    // réception d'entrée clavier
 	    j = 0;
@@ -440,7 +440,7 @@ void suzuki_kasami(int my_id, int port, char * nom_client1, int port_c1, int id_
 }
 
 // fonction peut-être à revoir ou inutile dans le client
-void send_udp(char * mes, char * nom, int port) 
+void send_udp(char * mes, char * nom, int port, int * horloge) 
 {
     int s_com, emis;
     struct sockaddr_in adr, appelant;
